@@ -2,7 +2,14 @@ package io.github.aws.config;
 
 import com.amazonaws.services.scheduler.AmazonScheduler;
 import com.amazonaws.services.scheduler.AmazonSchedulerClientBuilder;
-import com.amazonaws.services.scheduler.model.*;
+import com.amazonaws.services.scheduler.model.CreateScheduleRequest;
+import com.amazonaws.services.scheduler.model.FlexibleTimeWindow;
+import com.amazonaws.services.scheduler.model.FlexibleTimeWindowMode;
+import com.amazonaws.services.scheduler.model.Target;
+
+import java.time.Instant;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 
 /**
  * Permission policy for execution role
@@ -12,7 +19,7 @@ import com.amazonaws.services.scheduler.model.*;
  *     "Statement": [
  *         {
  *             "Action": [
- *                 "sqs:SendMessage"</code>
+ *                 "sqs:SendMessage"
  *             ],
  *            "Effect": "Allow",
  *            "Resource": "*"
@@ -27,8 +34,8 @@ public class AwsSchedulerConfig {
         return AmazonSchedulerClientBuilder.defaultClient();
     }
 
-    public void test(AmazonScheduler client) {
-        String data = """
+    public static void main(String[] args) {
+        var data = """
                 {
                   "QueryUrl": "https://sqs.eu-central-1.amazonaws.com/<ACCOUNT_ID>/<queue_name>",
                   "MessageBody": "<payload>",
@@ -40,20 +47,29 @@ public class AwsSchedulerConfig {
                   }
                 }
                 """;
-        CreateScheduleRequest request = new CreateScheduleRequest()
+
+        var formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
+
+        var timestamp = Instant.now().plus(24, ChronoUnit.HOURS);
+        var expression = "at(" + formatter.format(timestamp) + ")";
+
+        var request = new CreateScheduleRequest()
                 .withName("test")
                 .withFlexibleTimeWindow(new FlexibleTimeWindow()
                         .withMode(FlexibleTimeWindowMode.FLEXIBLE)
                         .withMaximumWindowInMinutes(15))
-                .withScheduleExpression("at(2024-01-01T10:00:00)")
+                .withScheduleExpression(expression)
                 .withTarget(new Target()
                         .withArn("")
                         .withRoleArn("")
-                        .withInput(data)
-                        .withSqsParameters(new SqsParameters()
-                                .withMessageGroupId("")));
+                        .withInput(data));
+        // SQS templated target do not allow message attributes
+        // for that universal target must be used.
+                        //.withSqsParameters(new SqsParameters()
+                        //        .withMessageGroupId("")));
 
-
-        client.createSchedule(request);
+        var client = new AwsSchedulerConfig().schedulerClient();
+        var result = client.createSchedule(request);
+        System.out.println(result);
     }
 }
